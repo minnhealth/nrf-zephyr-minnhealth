@@ -635,12 +635,17 @@ static int sx1509b_init(const struct device *dev)
 {
 	int rc;
 
-    rc = pm_device_runtime_enable(dev);
+    rc = sx1509b_power_on(dev);
     if (rc < 0) {
-        LOG_ERR("Failed pm setup: %d", rc);
+        LOG_ERR("Failed %s init: %d", dev->name, rc);
         return rc;
     }
-    rc = sx1509b_power_on(dev);
+
+    rc = pm_device_runtime_enable(dev);
+    if ((rc < 0) && (rc != -ENOSYS)) {
+        LOG_ERR("Failed %s pm setup: %d", dev->name, rc);
+        return rc;
+    }
     return rc;
 }
 
@@ -741,18 +746,19 @@ int sx1509b_led_intensity_pin_set(const struct device *dev, gpio_pin_t pin,
 
 static int sx1509b_pm_action(const struct device *dev, enum pm_device_action action)
 {
-    LOG_INF("ACTION: %d", action);
     switch (action) {
     case PM_DEVICE_ACTION_SUSPEND:
         /* suspend the device */
         break;
     case PM_DEVICE_ACTION_RESUME:
         /* resume the device */
+        // Re-initialize the sx1509b on resume
         sx1509b_power_on(dev);
         break;
     case PM_DEVICE_ACTION_TURN_OFF:
         break;
     case PM_DEVICE_ACTION_TURN_ON:
+        // Re-initialize the sx1509b on resume
         sx1509b_power_on(dev);
         break;
     default:
@@ -787,6 +793,6 @@ PM_DEVICE_DT_INST_DEFINE(0, sx1509b_pm_action);
 
 DEVICE_DT_INST_DEFINE(0, sx1509b_init, PM_DEVICE_DT_INST_GET(0),
 		 &sx1509b_drvdata, &sx1509b_cfg,
-		 PRE_KERNEL_1, CONFIG_GPIO_INIT_PRIORITY,
+		 POST_KERNEL, CONFIG_GPIO_SX1509B_INIT_PRIORITY,
 		 &api_table);
 
